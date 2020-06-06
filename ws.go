@@ -9,7 +9,10 @@ const addressDataUrl = "https://6obcy.org/ajax/addressData"
 
 // {"host":"server.6obcy.pl","port":"7002","from":"ajaxPHP","s6":"tak"}
 type addressData struct {
-	host, port, from, s6 string
+	Host string `json:"host"`
+	Port string `json:"port"`
+	From string `json:"from"`
+	S6   string `json:"s6"`
 }
 
 func WSAddr() (*addressData, error) {
