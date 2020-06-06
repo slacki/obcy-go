@@ -7,6 +7,9 @@ import (
 )
 
 func main() {
-	v, _ := obcy.WSAddr()
-	fmt.Printf("%+v", v)
+	c, err := obcy.NewClient()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%+v", c)
 }
