@@ -4,11 +4,26 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// {"host":"server.6obcy.pl","port":"7002","from":"ajaxPHP","s6":"tak"}
+const addrDataUrl = "https://6obcy.org/ajax/addressData"
+const wsUrlSuffix = "/6eio/?EIO=3&transport=websocket"
+
+// WS represents websocket connection to 6obcy's servers
+type WS struct {
+}
+
+type RawMessage struct {
+	Type    int
+	Message []byte
+}
+
+// addressData is a JSON response from /ajax/addressData.
+// It contains data used to establish a websocket connection.
 type addressData struct {
 	Host string `json:"host"`
 	Port string `json:"port"`
@@ -16,44 +31,107 @@ type addressData struct {
 	S6   string `json:"s6"`
 }
 
-const addrDataUrl = "https://6obcy.org/ajax/addressData"
-const wsUrlSuffix = "/6eio/?EIO=3&transport=websocket"
-
-type WS struct {
-	conn *websocket.Conn
-}
-
-func NewWS() (*WS, error) {
-	var ws = &WS{}
-	err := ws.connect()
-	if err != nil {
-		return nil, err
-	}
-	return ws, nil
-}
-
-func (ws *WS) connect() error {
-	r, err := http.Get(addrDataUrl)
+// Connect opens websocket connection.
+// It takes send and receive channels as arguments and will
+// exchange informations via those channels.
+// Should be called asynchronously.
+func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
+	url, err := ws.getWebsocketURL(false)
 	if err != nil {
 		return err
+	}
+	log.Println("ws Connect:", url)
+
+	conn, _, err := websocket.DefaultDialer.Dial(url, http.Header{
+		// Origin is important, it won't connect otherwise
+		"Origin": {"https://6obcy.org"},
+		// User-Agent can be ommited, but we want to look legit
+		"User-Agent": {"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"},
+	})
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	done := make(chan bool)
+
+	// start recv goroutine
+	go func() {
+		defer close(done)
+		for {
+			msgType, msgBytes, err := conn.ReadMessage()
+			if err != nil {
+				log.Println("Failed to read:", err)
+				return
+			}
+
+			msgStr := string(msgBytes)
+			if strings.HasPrefix(msgStr, "0") {
+
+			}
+
+			receive <- &RawMessage{
+				Type:    msgType,
+				Message: msgBytes,
+			}
+		}
+	}()
+
+	// start send goroutine
+	go func() {
+		for {
+			rm := <-send
+			err := conn.WriteMessage(rm.Type, rm.Message)
+			if err != nil {
+				log.Println("Failed to write:", err)
+			}
+		}
+	}()
+
+	// create a ticker and take care of sending pings
+	// for now it's hardcoded how often wa wanna do this
+	ticker := time.NewTicker(time.Millisecond * 25000)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			err := conn.WriteMessage(websocket.TextMessage, []byte("3"))
+			if err != nil {
+				log.Println("Failed to ping", err)
+			}
+		case <-stop:
+			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err != nil {
+				log.Println("write close:", err)
+			}
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+			}
+			stop <- true
+			return nil
+		}
+	}
+}
+
+// getWebsocketURL asks server where to connect and prepares an URL.
+func (ws *WS) getWebsocketURL(secure bool) (string, error) {
+	r, err := http.Get(addrDataUrl)
+	if err != nil {
+		return "", err
 	}
 	defer r.Body.Close()
 
 	addrData := &addressData{}
 	err = json.NewDecoder(r.Body).Decode(addrData)
 
-	url := "ws://" + addrData.Host + ":" + addrData.Port + wsUrlSuffix
-	log.Println(">>> Connecting to", url)
-
-	c, _, err := websocket.DefaultDialer.Dial(url, http.Header{
-		"Origin":     {"https://6obcy.org"},
-		"User-Agent": {"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"},
-	})
-	if err != nil {
-		return err
+	url := addrData.Host + ":" + addrData.Port + wsUrlSuffix
+	if secure {
+		url = "wss://" + url
+	} else {
+		url = "ws://" + url
 	}
 
-	ws.conn = c
-
-	return nil
+	return url, nil
 }
