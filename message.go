@@ -3,6 +3,8 @@ package obcy
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"strconv"
 	"unicode/utf8"
 )
 
@@ -11,6 +13,11 @@ const (
 	pingMessagePrefix  = 2
 	pongMessagePrefix  = 3
 	eventMessagePrefix = 4
+)
+
+const (
+	clientAcceptedMessageIdentifier = "cn_acc"
+	clientInfoMessageIdentifier     = "_cinfo"
 )
 
 type setupMessage struct {
@@ -27,15 +34,10 @@ type message interface {
 	EventName() string
 }
 
-func dropMessageType(s string) string {
-	_, i := utf8.DecodeRuneInString(s)
-	return s[i:]
-}
-
 type genericMessage struct {
 	Prefix    int
-	EventName string      `json:"ev_name"`
-	EventData interface{} `json:"ev_data`
+	EventName string  `json:"ev_name"`
+	EventData message `json:"ev_data"`
 }
 
 func (gm *genericMessage) Bytes() ([]byte, error) {
@@ -44,7 +46,56 @@ func (gm *genericMessage) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	return []byte(fmt.Sprintf("%s%s", gm.Prefix, b)), nil
+	return []byte(fmt.Sprintf("%d%s", gm.Prefix, b)), nil
+}
+
+func PayloadToGeneric(b []byte) *genericMessage {
+	prefix, jsonStr := RawToTypeAndJSON(b)
+	jsonBytes := []byte(jsonStr)
+
+	intermediate := &struct {
+		EventName string      `json:"ev_name"`
+		EventData interface{} `json:"ev_data"`
+	}{}
+	err := json.Unmarshal(jsonBytes, intermediate)
+
+	evDataBytes, err := json.Marshal(intermediate.EventData)
+	if err != nil {
+		log.Fatalln("Failed to re-marshall ev_data", err)
+	}
+
+	var msg message
+	switch intermediate.EventName {
+	case clientAcceptedMessageIdentifier:
+		msg = &clientAcceptedMessage{}
+		err = json.Unmarshal(evDataBytes, msg)
+	case clientInfoMessageIdentifier:
+		msg = &clientInfoMessage{}
+		err = json.Unmarshal(evDataBytes, msg)
+	default:
+		log.Println("Couldn't find message for ev_name", intermediate.EventName)
+	}
+	if err != nil {
+		log.Fatalln("Failed to parse a message", err)
+	}
+
+	return &genericMessage{
+		Prefix:    prefix,
+		EventData: msg,
+		EventName: intermediate.EventName,
+	}
+}
+
+// RawToTypeAndJSON takes raw payload and returns message type and json string
+func RawToTypeAndJSON(b []byte) (int, string) {
+	s := string(b)
+	_, i := utf8.DecodeRuneInString(s)
+	prefix, err := strconv.Atoi(s[:i])
+	if err != nil {
+		log.Fatalln("Failed to parse message prefix", err)
+	}
+
+	return prefix, s[i:]
 }
 
 // 4
@@ -62,7 +113,6 @@ func (gm *genericMessage) Bytes() ([]byte, error) {
 //         }
 //     }
 // }
-
 type clientInfoMessage struct {
 	CVDate        string `json:"cvdate"`
 	Mobile        bool   `json:"mobile"`
@@ -111,7 +161,7 @@ func (cim *clientInfoMessage) Prefix() int {
 }
 
 func (cim *clientInfoMessage) EventName() string {
-	return "_cinfo"
+	return clientInfoMessageIdentifier
 }
 
 // 4
@@ -122,7 +172,6 @@ func (cim *clientInfoMessage) EventName() string {
 //         "hash": "37#4#253#91"
 //     }
 // }
-
 type clientAcceptedMessage struct {
 	ConnectionID string `json:"conn_id"`
 	Hash         string `json:"hash"`
@@ -148,5 +197,5 @@ func (cam *clientAcceptedMessage) Prefix() int {
 }
 
 func (cam *clientAcceptedMessage) EventName() string {
-	return "cn_acc"
+	return clientAcceptedMessageIdentifier
 }

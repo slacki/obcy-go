@@ -2,14 +2,21 @@ package obcy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 )
 
 // Client is the 6obcy client
 type Client struct {
+	// no name yet lol
+	SID string
+
+	// public channels
 	Message  chan string
 	IsTyping chan bool
 
+	// private channels
 	recv chan *RawMessage
 	send chan *RawMessage
 }
@@ -36,7 +43,6 @@ func (c *Client) Connect(ctx context.Context) {
 	for {
 		select {
 		case m := <-c.recv:
-			fmt.Println(string(m.Message))
 			c.processMessage(m)
 		case <-ctx.Done():
 			stopCh <- true
@@ -47,5 +53,30 @@ func (c *Client) Connect(ctx context.Context) {
 }
 
 func (c *Client) processMessage(m *RawMessage) *message {
+	fmt.Printf("%s\n\n", m.Payload)
+
+	if c.SID == "" {
+		// check for setup message
+		prefix, setupMsg := RawToTypeAndJSON(m.Payload)
+		if prefix == setupMessagePrefix {
+			sm := &setupMessage{}
+			err := json.Unmarshal([]byte(setupMsg), sm)
+			if err != nil {
+				log.Fatalln("Failed to parse setup message", err)
+			}
+			c.SID = sm.SID
+
+			return nil
+		}
+	}
+
+	gm := PayloadToGeneric(m.Payload)
+	switch gm.EventData.(type) {
+	case *clientAcceptedMessage:
+		fmt.Println("ClientAcceptedMessage")
+	case *clientInfoMessage:
+		fmt.Println("ClientInfoMessage")
+	}
+
 	return nil
 }

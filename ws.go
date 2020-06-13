@@ -4,22 +4,22 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-const addrDataUrl = "https://6obcy.org/ajax/addressData"
-const wsUrlSuffix = "/6eio/?EIO=3&transport=websocket"
+const addrDataURL = "https://6obcy.org/ajax/addressData"
+const wsURLSuffix = "/6eio/?EIO=3&transport=websocket"
 
 // WS represents websocket connection to 6obcy's servers
 type WS struct {
 }
 
+// RawMessage is a raw websocket message with type and payload
 type RawMessage struct {
 	Type    int
-	Message []byte
+	Payload []byte
 }
 
 // addressData is a JSON response from /ajax/addressData.
@@ -68,13 +68,12 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 			}
 
 			if !initialized {
-				msgStr := string(msgBytes)
-				if strings.HasPrefix(msgStr, "0") {
-					msg := []byte(dropMessageType(msgStr))
+				prefix, msg := RawToTypeAndJSON(msgBytes)
+				if prefix == setupMessagePrefix {
 					sm := &setupMessage{}
-					err := json.Unmarshal(msg, sm)
+					err := json.Unmarshal([]byte(msg), sm)
 					if err != nil {
-						log.Println("Failed to parse setup message", err, msgStr)
+						log.Fatalf("Failed to parse setup message %s %s\n", err, msg)
 						return
 					}
 					setup <- sm
@@ -84,7 +83,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 
 			receive <- &RawMessage{
 				Type:    msgType,
-				Message: msgBytes,
+				Payload: msgBytes,
 			}
 		}
 	}()
@@ -93,7 +92,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	go func() {
 		for {
 			rm := <-send
-			err := conn.WriteMessage(rm.Type, rm.Message)
+			err := conn.WriteMessage(rm.Type, rm.Payload)
 			if err != nil {
 				log.Println("Failed to write:", err)
 			}
@@ -114,6 +113,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	ticker := time.NewTicker(time.Millisecond * time.Duration(setupMsg.PingInterval))
 	defer ticker.Stop()
 
+	// start main ws goroutine
 	for {
 		select {
 		case <-ticker.C:
@@ -138,7 +138,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 
 // getWebsocketURL asks server where to connect and prepares an URL.
 func (ws *WS) getWebsocketURL(secure bool) (string, error) {
-	r, err := http.Get(addrDataUrl)
+	r, err := http.Get(addrDataURL)
 	if err != nil {
 		return "", err
 	}
@@ -147,7 +147,7 @@ func (ws *WS) getWebsocketURL(secure bool) (string, error) {
 	addrData := &addressData{}
 	err = json.NewDecoder(r.Body).Decode(addrData)
 
-	url := addrData.Host + ":" + addrData.Port + wsUrlSuffix
+	url := addrData.Host + ":" + addrData.Port + wsURLSuffix
 	if secure {
 		url = "wss://" + url
 	} else {
