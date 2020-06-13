@@ -2,8 +2,10 @@ package obcy
 
 import (
 	"context"
+	"fmt"
 )
 
+// Client is the 6obcy client
 type Client struct {
 	Message  chan string
 	IsTyping chan bool
@@ -12,6 +14,7 @@ type Client struct {
 	send chan *RawMessage
 }
 
+// NewClient creates new Client
 func NewClient() (*Client, error) {
 	return &Client{
 		Message:  make(chan string, 100),
@@ -22,6 +25,7 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
+// Connect connects to the client with websockets and handles sending and receiving messages
 func (c *Client) Connect(ctx context.Context) {
 	// stop chan for ws
 	stopCh := make(chan bool)
@@ -32,6 +36,7 @@ func (c *Client) Connect(ctx context.Context) {
 	for {
 		select {
 		case m := <-c.recv:
+			fmt.Println(string(m.Message))
 			c.processMessage(m)
 		case <-ctx.Done():
 			stopCh <- true
@@ -41,6 +46,6 @@ func (c *Client) Connect(ctx context.Context) {
 	}
 }
 
-func (c *Client) processMessage(m *RawMessage) *Message {
-
+func (c *Client) processMessage(m *RawMessage) *message {
+	return nil
 }

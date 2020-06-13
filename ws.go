@@ -54,9 +54,11 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	defer conn.Close()
 
 	done := make(chan bool)
+	setup := make(chan *setupMessage)
 
 	// start recv goroutine
 	go func() {
+		initialized := false
 		defer close(done)
 		for {
 			msgType, msgBytes, err := conn.ReadMessage()
@@ -65,9 +67,19 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 				return
 			}
 
-			msgStr := string(msgBytes)
-			if strings.HasPrefix(msgStr, "0") {
-
+			if !initialized {
+				msgStr := string(msgBytes)
+				if strings.HasPrefix(msgStr, "0") {
+					msg := []byte(dropMessageType(msgStr))
+					sm := &setupMessage{}
+					err := json.Unmarshal(msg, sm)
+					if err != nil {
+						log.Println("Failed to parse setup message", err, msgStr)
+						return
+					}
+					setup <- sm
+					initialized = true
+				}
 			}
 
 			receive <- &RawMessage{
@@ -88,9 +100,18 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 		}
 	}()
 
+	var setupMsg *setupMessage
+
+	select {
+	case sm := <-setup:
+		setupMsg = sm
+	case <-time.After(5 * time.Second):
+		log.Println("Waited 5 seconds for setup message")
+	}
+
 	// create a ticker and take care of sending pings
 	// for now it's hardcoded how often wa wanna do this
-	ticker := time.NewTicker(time.Millisecond * 25000)
+	ticker := time.NewTicker(time.Millisecond * time.Duration(setupMsg.PingInterval))
 	defer ticker.Stop()
 
 	for {
