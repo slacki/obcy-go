@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"github.com/gorilla/websocket"
 )
 
 // Client is the 6obcy client
 type Client struct {
 	// no name yet lol
-	SID string
+	SID  string
+	Hash string
 
 	// public channels
 	Message  chan string
@@ -53,7 +56,7 @@ func (c *Client) Connect(ctx context.Context) {
 }
 
 func (c *Client) processMessage(m *RawMessage) *message {
-	fmt.Printf("%s\n\n", m.Payload)
+	fmt.Printf("%s\n", m.Payload)
 
 	if c.SID == "" {
 		// check for setup message
@@ -71,12 +74,38 @@ func (c *Client) processMessage(m *RawMessage) *message {
 	}
 
 	gm := PayloadToGeneric(m.Payload)
-	switch gm.EventData.(type) {
+	switch v := gm.EventData.(type) {
 	case *clientAcceptedMessage:
-		fmt.Println("ClientAcceptedMessage")
+		c.Hash = v.Hash
+		c.sendClientInfo()
+		c.sendOwack()
 	case *clientInfoMessage:
 		fmt.Println("ClientInfoMessage")
 	}
 
 	return nil
+}
+
+func (c *Client) sendMessage(m message) error {
+	b, err := m.Bytes()
+	if err != nil {
+		return err
+	}
+
+	c.send <- &RawMessage{
+		Type:    websocket.TextMessage,
+		Payload: b,
+	}
+
+	return nil
+}
+
+func (c *Client) sendClientInfo() {
+	ci := NewClientInfoMessage(c.Hash, false)
+	c.sendMessage(ci)
+}
+
+func (c *Client) sendOwack() {
+	owack := &owackMessage{}
+	c.sendMessage(owack)
 }

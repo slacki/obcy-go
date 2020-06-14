@@ -18,6 +18,7 @@ const (
 const (
 	clientAcceptedMessageIdentifier = "cn_acc"
 	clientInfoMessageIdentifier     = "_cinfo"
+	owackMessageIdentifier          = "_owack"
 )
 
 type setupMessage struct {
@@ -198,4 +199,31 @@ func (cam *clientAcceptedMessage) Prefix() int {
 
 func (cam *clientAcceptedMessage) EventName() string {
 	return clientAcceptedMessageIdentifier
+}
+
+// 4
+// {"ev_name":"_owack"}
+type owackMessage struct{}
+
+func (om *owackMessage) Bytes() ([]byte, error) {
+	gm := &genericMessage{
+		Prefix:    om.Prefix(),
+		EventName: om.EventName(),
+		EventData: nil,
+	}
+
+	b, err := gm.Bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+func (om *owackMessage) Prefix() int {
+	return 4
+}
+
+func (om *owackMessage) EventName() string {
+	return owackMessageIdentifier
 }
