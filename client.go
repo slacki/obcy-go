@@ -1,7 +1,6 @@
 package obcy
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,52 +10,56 @@ import (
 
 // Client is the 6obcy client
 type Client struct {
-	// no name yet lol
-	SID  string
-	Hash string
+	SID       string
+	Hash      string
+	Connected bool
 
-	// public channels
-	Message  chan string
-	IsTyping chan bool
-
-	// private channels
-	recv chan *RawMessage
-	send chan *RawMessage
+	ws     *WS
+	recv   chan *RawMessage
+	send   chan *RawMessage
+	stopWS chan bool
 }
 
 // NewClient creates new Client
 func NewClient() (*Client, error) {
 	return &Client{
-		Message:  make(chan string, 100),
-		IsTyping: make(chan bool, 100),
-
-		recv: make(chan *RawMessage, 100),
-		send: make(chan *RawMessage, 100),
+		recv:      make(chan *RawMessage, 100),
+		send:      make(chan *RawMessage, 100),
+		stopWS:    make(chan bool),
+		Connected: false,
 	}, nil
 }
 
 // Connect connects to the client with websockets and handles sending and receiving messages
-func (c *Client) Connect(ctx context.Context) {
-	// stop chan for ws
-	stopCh := make(chan bool)
-
-	ws := &WS{}
-	go ws.Connect(c.send, c.recv, stopCh)
-
-	for {
-		select {
-		case m := <-c.recv:
-			c.processMessage(m)
-		case <-ctx.Done():
-			stopCh <- true
-			<-stopCh
-			return
+func (c *Client) Connect() {
+	c.ws = &WS{}
+	go c.ws.Connect(c.send, c.recv, c.stopWS)
+	go func() {
+		for {
+			select {
+			case m, open := <-c.recv:
+				if open {
+					c.processMessage(m)
+				} else {
+					return
+				}
+			}
 		}
-	}
+	}()
+}
+
+// Disconnect closes WS connection, waits for confirmation that it's been closed
+// and then closes all channels used to communicate with websocket.
+func (c *Client) Disconnect() {
+	c.stopWS <- true
+	<-c.stopWS
+	close(c.stopWS)
+	close(c.recv)
+	close(c.send)
 }
 
 func (c *Client) processMessage(m *RawMessage) *message {
-	fmt.Printf("%s\n", m.Payload)
+	fmt.Println("processing message", string(m.Payload))
 
 	if c.SID == "" {
 		// check for setup message
@@ -79,6 +82,8 @@ func (c *Client) processMessage(m *RawMessage) *message {
 		c.Hash = v.Hash
 		c.sendClientInfo()
 		c.sendOwack()
+		c.Connected = true
+		fmt.Println("CONNECTED, BIATCH")
 	case *clientInfoMessage:
 		fmt.Println("ClientInfoMessage")
 	}

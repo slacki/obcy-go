@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -18,20 +16,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	go c.Connect(ctx)
+	c.Connect()
+	defer c.Disconnect()
 
-outer:
-	for {
-		select {
-		case m := <-c.Message:
-			fmt.Println("Received message:", m)
-		case t := <-c.IsTyping:
-			fmt.Println("Obcy is typing?", t)
-		case <-interrupt:
-			log.Println("Received interrupt")
-			cancel()
-			break outer
-		}
+	select {
+	case <-interrupt:
+		log.Println("Received interrupt")
 	}
 }
