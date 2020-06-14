@@ -19,10 +19,39 @@ const (
 	clientAcceptedMessageIdentifier = "cn_acc"
 	clientInfoMessageIdentifier     = "_cinfo"
 	owackMessageIdentifier          = "_owack"
+	initChatMessageIdentifier       = "_sas"
+	chatStartedMessageIdentifier    = "talk_s"
 )
 
+const (
+	locationEntirePoland = iota
+	locationPodlaskie
+	locationDolnoslaskie
+	locationPodkarpackie
+	locationKujawskoPomorskie
+	locationPomorskie
+	locationLubelskie
+	locationSlaskie
+	locationLubuskie
+	locationSwietokrzyskie
+	locationLodzkie
+	locationWarminskoMazurskie
+	locationMalopolskie
+	locationWielkopolskie
+	locationMazowieckie
+	locationZachodnioPomorskie
+	locationOpolskie
+	locationOutsidePolan
+)
+
+// 0
+// {
+//     "sid": "wbWZ23LsEktuCKQ",
+//     "upgrades": [],
+//     "pingInterval": 25000,
+//     "pingTimeout": 40000
+// }
 type setupMessage struct {
-	// 0{"sid":"nRz2vmCnQ0ANJJ5","upgrades":[],"pingInterval":25000,"pingTimeout":40000}
 	SID          string   `json:"sid"`
 	Upgrades     []string `json:"upgrades"`
 	PingInterval int      `json:"pingInterval"`
@@ -39,6 +68,7 @@ type genericMessage struct {
 	Prefix    int
 	EventName string  `json:"ev_name"`
 	EventData message `json:"ev_data"`
+	CEID      int     `json:"ceid,omitempty"`
 }
 
 func (gm *genericMessage) Bytes() ([]byte, error) {
@@ -149,12 +179,7 @@ func (cim *clientInfoMessage) Bytes() ([]byte, error) {
 		EventData: cim,
 	}
 
-	b, err := gm.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
+	return gm.Bytes()
 }
 
 func (cim *clientInfoMessage) Prefix() int {
@@ -185,12 +210,7 @@ func (cam *clientAcceptedMessage) Bytes() ([]byte, error) {
 		EventData: cam,
 	}
 
-	b, err := gm.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
+	return gm.Bytes()
 }
 
 func (cam *clientAcceptedMessage) Prefix() int {
@@ -212,12 +232,7 @@ func (om *owackMessage) Bytes() ([]byte, error) {
 		EventData: nil,
 	}
 
-	b, err := gm.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
+	return gm.Bytes()
 }
 
 func (om *owackMessage) Prefix() int {
@@ -226,4 +241,127 @@ func (om *owackMessage) Prefix() int {
 
 func (om *owackMessage) EventName() string {
 	return owackMessageIdentifier
+}
+
+// 4
+// {
+//     "ev_name": "_sas",
+//     "ev_data": {
+//         "channel": "main",
+//         "myself": {
+//             "sex": 0,
+//             "loc": 0
+//         },
+//         "preferences": {
+//             "sex": 0,
+//             "loc": 0
+//         }
+//     },
+//     "ceid": 1
+// }
+type initChatMessage struct {
+	Channel     string                     `json:"channel"`
+	Myself      initChatMessagePreferences `json:"myself"`
+	Preferences initChatMessagePreferences `json:"preferences"`
+}
+
+type initChatMessagePreferences struct {
+	Sex      int `json:"sex"`
+	Location int `json:"location"`
+}
+
+func newInitChatMessage() *initChatMessage {
+	pref := initChatMessagePreferences{
+		Sex:      0,
+		Location: locationEntirePoland,
+	}
+	return &initChatMessage{
+		Channel:     "main",
+		Myself:      pref,
+		Preferences: pref,
+	}
+}
+
+func (ic *initChatMessage) Bytes() ([]byte, error) {
+	gm := &genericMessage{
+		Prefix:    ic.Prefix(),
+		EventName: ic.EventName(),
+		EventData: ic,
+	}
+
+	return gm.Bytes()
+}
+
+func (ic *initChatMessage) Prefix() int {
+	return 4
+}
+
+func (ic *initChatMessage) EventName() string {
+	return initChatMessageIdentifier
+}
+
+// 4
+// {
+//     "ev_name": "talk_s",
+//     "ev_data": {
+//         "cid": 41377010,
+//         "ckey": "0:41377010_MS9MeFFRRPbJC",
+//         "flaged": false
+//     }
+// }
+type chatStartedMessage struct {
+	ChatID  int    `json:"cid"`
+	ChatKey string `json:"ckey"`
+	// yes, it's their fault
+	Flagged bool `json:"flaged"`
+}
+
+func (cs *chatStartedMessage) Bytes() ([]byte, error) {
+	gm := &genericMessage{
+		Prefix:    cs.Prefix(),
+		EventName: cs.EventName(),
+		EventData: cs,
+	}
+
+	return gm.Bytes()
+}
+
+func (cs *chatStartedMessage) Prefix() int {
+	return 4
+}
+
+func (cs *chatStartedMessage) EventName() string {
+	return chatStartedMessageIdentifier
+}
+
+// 4
+// {
+//     "ev_name": "_begacked",
+//     "ev_data": {
+//         "ckey": "0:41377010_MS9MeFFRRPbJC"
+//     },
+//     "ceid": 2
+// }
+type chatStartedAnckowledgeMessage struct {
+	CKey string `json:"ckey"`
+	CEID int
+}
+
+func (csa *chatStartedAnckowledgeMessage) Bytes() ([]byte, error) {
+	gm := &genericMessage{
+		Prefix:    csa.Prefix(),
+		EventName: csa.EventName(),
+		EventData: csa,
+		CEID:      csa.CEID,
+	}
+
+	return gm.Bytes()
+}
+
+func (csa *chatStartedAnckowledgeMessage) Prefix() int {
+	return 4
+}
+
+func (csa *chatStartedAnckowledgeMessage) EventName() string {
+	return chatStartedMessageIdentifier
 }
