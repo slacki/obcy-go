@@ -82,7 +82,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 				}
 			}
 
-			fmt.Println("ws <-:", string(msgBytes))
+			fmt.Println("ws ->:", string(msgBytes))
 
 			receive <- &RawMessage{
 				Type:    msgType,
@@ -96,7 +96,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 		for {
 			rm := <-send
 
-			fmt.Println("ws ->:", string(rm.Payload))
+			fmt.Println("ws <-:", string(rm.Payload))
 
 			err := conn.WriteMessage(rm.Type, rm.Payload)
 			if err != nil {

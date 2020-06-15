@@ -83,7 +83,6 @@ func (c *Client) processMessage(m *RawMessage) *message {
 		c.sendClientInfo()
 		c.sendOwack()
 		c.Connected = true
-		fmt.Println("CONNECTED, BIATCH")
 	case *clientInfoMessage:
 		fmt.Println("ClientInfoMessage")
 	}
