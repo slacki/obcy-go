@@ -82,9 +82,6 @@ func (c *Client) processMessage(m *RawMessage) *message {
 		c.Hash = v.Hash
 		c.sendClientInfo()
 		c.sendOwack()
-		c.Connected = true
-	case *clientInfoMessage:
-		fmt.Println("ClientInfoMessage")
 	}
 
 	return nil
