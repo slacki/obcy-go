@@ -8,49 +8,35 @@ import (
 	"unicode/utf8"
 )
 
+type prefix int
+type eventName string
+
 const (
-	setupMessagePrefix = 0
-	pingMessagePrefix  = 2
-	pongMessagePrefix  = 3
-	eventMessagePrefix = 4
+	setup prefix = 0
+	ping  prefix = 2
+	pong  prefix = 3
+	event prefix = 4
 )
 
 const (
-	clientAcceptedMessageIdentifier = "cn_acc"
-	clientInfoMessageIdentifier     = "_cinfo"
-	owackMessageIdentifier          = "_owack"
-	initChatMessageIdentifier       = "_sas"
-	chatStartedMessageIdentifier    = "talk_s"
+	clientAccepted eventName = "cn_acc"
+	clientInfo     eventName = "_cinfo"
+	owack          eventName = "_owack"
+	initChat       eventName = "_sas"
+	chatStarted    eventName = "talk_s"
 )
 
-const (
-	locationEntirePoland = iota
-	locationPodlaskie
-	locationDolnoslaskie
-	locationPodkarpackie
-	locationKujawskoPomorskie
-	locationPomorskie
-	locationLubelskie
-	locationSlaskie
-	locationLubuskie
-	locationSwietokrzyskie
-	locationLodzkie
-	locationWarminskoMazurskie
-	locationMalopolskie
-	locationWielkopolskie
-	locationMazowieckie
-	locationZachodnioPomorskie
-	locationOpolskie
-	locationOutsidePolan
-)
+func rawToTypeAndJSON(b []byte) (prefix, string) {
+	s := string(b)
+	_, i := utf8.DecodeRuneInString(s)
+	p, err := strconv.Atoi(s[:i])
+	if err != nil {
+		log.Fatalln("Failed to parse message prefix", err)
+	}
 
-// 0
-// {
-//     "sid": "wbWZ23LsEktuCKQ",
-//     "upgrades": [],
-//     "pingInterval": 25000,
-//     "pingTimeout": 40000
-// }
+	return prefix(p), s[i:]
+}
+
 type setupMessage struct {
 	SID          string   `json:"sid"`
 	Upgrades     []string `json:"upgrades"`
@@ -58,310 +44,136 @@ type setupMessage struct {
 	PingTimeout  int      `json:"pingTimeout"`
 }
 
-type message interface {
-	Bytes() ([]byte, error)
-	Prefix() int
-	EventName() string
+type message struct {
+	Prefix    prefix
+	EventName eventName   `json:"ev_name"`
+	EventData interface{} `json:"ev_data"`
+	CEID      int         `json:"ceid,omitempty"`
 }
 
-type genericMessage struct {
-	Prefix    int
-	EventName string  `json:"ev_name"`
-	EventData message `json:"ev_data"`
-	CEID      int     `json:"ceid,omitempty"`
-}
+func payloadToMessage(b []byte) (*message, error) {
+	pr, jsonStr := rawToTypeAndJSON(b)
+	jsonBytes := []byte(jsonStr)
 
-func (gm *genericMessage) Bytes() ([]byte, error) {
-	b, err := json.Marshal(gm)
+	eventNameInter := &struct {
+		EventName eventName `json:"ev_name"`
+	}{}
+	err := json.Unmarshal(jsonBytes, eventNameInter)
 	if err != nil {
 		return nil, err
 	}
 
-	return []byte(fmt.Sprintf("%d%s", gm.Prefix, b)), nil
+	m := &message{
+		Prefix:    pr,
+		EventName: eventNameInter.EventName,
+	}
+
+	fillED := func(v interface{}) {
+		if v == nil {
+			m.EventData = v
+		} else {
+			json.Unmarshal(jsonBytes, v)
+			m.EventData = v
+		}
+	}
+
+	// oof, golang, this sucks
+	switch en := m.EventName; en {
+	case clientAccepted:
+		fillED(&clientAcceptedED{})
+	case clientInfo:
+		fillED(&clientInfoED{})
+	case owack:
+		fillED(nil)
+	case initChat:
+		fillED(&clientAcceptedED{})
+	case chatStarted:
+		fillED(&clientAcceptedED{})
+	}
+
+	return m, nil
 }
 
-func PayloadToGeneric(b []byte) *genericMessage {
-	prefix, jsonStr := RawToTypeAndJSON(b)
-	jsonBytes := []byte(jsonStr)
+func newMessage(p prefix, en eventName, ed interface{}) *message {
+	return &message{
+		Prefix:    p,
+		EventName: en,
+		EventData: ed,
+	}
+}
 
-	intermediate := &struct {
-		EventName string      `json:"ev_name"`
-		EventData interface{} `json:"ev_data"`
-	}{}
-	err := json.Unmarshal(jsonBytes, intermediate)
-
-	evDataBytes, err := json.Marshal(intermediate.EventData)
+func (m *message) Bytes() ([]byte, error) {
+	b, err := json.Marshal(m)
 	if err != nil {
-		log.Fatalln("Failed to re-marshall ev_data", err)
+		return nil, err
 	}
 
-	var msg message
-	switch intermediate.EventName {
-	case clientAcceptedMessageIdentifier:
-		msg = &clientAcceptedMessage{}
-		err = json.Unmarshal(evDataBytes, msg)
-	case clientInfoMessageIdentifier:
-		msg = &clientInfoMessage{}
-		err = json.Unmarshal(evDataBytes, msg)
-	default:
-		log.Println("Couldn't find message for ev_name", intermediate.EventName)
-	}
-	if err != nil {
-		log.Fatalln("Failed to parse a message", err)
-	}
-
-	return &genericMessage{
-		Prefix:    prefix,
-		EventData: msg,
-		EventName: intermediate.EventName,
-	}
+	return []byte(fmt.Sprintf("%d%s", m.Prefix, b)), nil
 }
 
-// RawToTypeAndJSON takes raw payload and returns message type and json string
-func RawToTypeAndJSON(b []byte) (int, string) {
-	s := string(b)
-	_, i := utf8.DecodeRuneInString(s)
-	prefix, err := strconv.Atoi(s[:i])
-	if err != nil {
-		log.Fatalln("Failed to parse message prefix", err)
-	}
-
-	return prefix, s[i:]
+type clientInfoED struct {
+	CVDate        string             `json:"cvdate"`
+	Mobile        bool               `json:"mobile"`
+	ClientVersion string             `json:"cver"`
+	ADF           string             `json:"adf"`
+	Hash          string             `json:"hash"`
+	TestData      clientInfoTestData `json:"testdata"`
 }
 
-// 4
-// {
-//     "ev_name": "_cinfo",
-//     "ev_data": {
-//         "cvdate": "2017-08-01",
-//         "mobile": false,
-//         "cver": "v2.5",
-//         "adf": "ajaxPHP",
-//         "hash": "37#4#253#91",
-//         "testdata": {
-//             "ckey": 0,
-//             "recevsent": false
-//         }
-//     }
-// }
-type clientInfoMessage struct {
-	CVDate        string `json:"cvdate"`
-	Mobile        bool   `json:"mobile"`
-	ClientVersion string `json:"cver"`
-	ADF           string `json:"adf"`
-	Hash          string `json:"hash"`
-	TestData      clientInfoMessageTestData
-}
-
-type clientInfoMessageTestData struct {
+type clientInfoTestData struct {
 	CKey      int  `json:"ckey"`
 	Recevsent bool `json:"recevsent"`
 }
 
-func NewClientInfoMessage(hash string, mobile bool) *clientInfoMessage {
-	return &clientInfoMessage{
+func newClientInfoED(hash string, mobile bool) *clientInfoED {
+	return &clientInfoED{
 		CVDate:        "2017-08-01",
 		Mobile:        mobile,
 		ClientVersion: "v2.5",
 		ADF:           "ajaxPHP",
 		Hash:          hash,
-		TestData: clientInfoMessageTestData{
+		TestData: clientInfoTestData{
 			CKey:      0,
 			Recevsent: false,
 		},
 	}
 }
 
-func (cim *clientInfoMessage) Bytes() ([]byte, error) {
-	gm := &genericMessage{
-		Prefix:    cim.Prefix(),
-		EventName: cim.EventName(),
-		EventData: cim,
-	}
-
-	return gm.Bytes()
-}
-
-func (cim *clientInfoMessage) Prefix() int {
-	return 4
-}
-
-func (cim *clientInfoMessage) EventName() string {
-	return clientInfoMessageIdentifier
-}
-
-// 4
-// {
-//     "ev_name": "cn_acc",
-//     "ev_data": {
-//         "conn_id": "VUfIn5CdzRvvOkG",
-//         "hash": "37#4#253#91"
-//     }
-// }
-type clientAcceptedMessage struct {
+type clientAcceptedED struct {
 	ConnectionID string `json:"conn_id"`
 	Hash         string `json:"hash"`
 }
 
-func (cam *clientAcceptedMessage) Bytes() ([]byte, error) {
-	gm := &genericMessage{
-		Prefix:    cam.Prefix(),
-		EventName: cam.EventName(),
-		EventData: cam,
-	}
-
-	return gm.Bytes()
+type initChatED struct {
+	Channel     string       `json:"channel"`
+	Myself      initChatPref `json:"myself"`
+	Preferences initChatPref `json:"preferences"`
 }
 
-func (cam *clientAcceptedMessage) Prefix() int {
-	return 4
-}
-
-func (cam *clientAcceptedMessage) EventName() string {
-	return clientAcceptedMessageIdentifier
-}
-
-// 4
-// {"ev_name":"_owack"}
-type owackMessage struct{}
-
-func (om *owackMessage) Bytes() ([]byte, error) {
-	gm := &genericMessage{
-		Prefix:    om.Prefix(),
-		EventName: om.EventName(),
-		EventData: nil,
-	}
-
-	return gm.Bytes()
-}
-
-func (om *owackMessage) Prefix() int {
-	return 4
-}
-
-func (om *owackMessage) EventName() string {
-	return owackMessageIdentifier
-}
-
-// 4
-// {
-//     "ev_name": "_sas",
-//     "ev_data": {
-//         "channel": "main",
-//         "myself": {
-//             "sex": 0,
-//             "loc": 0
-//         },
-//         "preferences": {
-//             "sex": 0,
-//             "loc": 0
-//         }
-//     },
-//     "ceid": 1
-// }
-type initChatMessage struct {
-	Channel     string                     `json:"channel"`
-	Myself      initChatMessagePreferences `json:"myself"`
-	Preferences initChatMessagePreferences `json:"preferences"`
-}
-
-type initChatMessagePreferences struct {
+type initChatPref struct {
 	Sex      int `json:"sex"`
 	Location int `json:"location"`
 }
 
-func newInitChatMessage() *initChatMessage {
-	pref := initChatMessagePreferences{
+func newInitChatEventData() *initChatED {
+	pref := initChatPref{
 		Sex:      0,
 		Location: locationEntirePoland,
 	}
-	return &initChatMessage{
+	return &initChatED{
 		Channel:     "main",
 		Myself:      pref,
 		Preferences: pref,
 	}
 }
 
-func (ic *initChatMessage) Bytes() ([]byte, error) {
-	gm := &genericMessage{
-		Prefix:    ic.Prefix(),
-		EventName: ic.EventName(),
-		EventData: ic,
-	}
-
-	return gm.Bytes()
-}
-
-func (ic *initChatMessage) Prefix() int {
-	return 4
-}
-
-func (ic *initChatMessage) EventName() string {
-	return initChatMessageIdentifier
-}
-
-// 4
-// {
-//     "ev_name": "talk_s",
-//     "ev_data": {
-//         "cid": 41377010,
-//         "ckey": "0:41377010_MS9MeFFRRPbJC",
-//         "flaged": false
-//     }
-// }
-type chatStartedMessage struct {
+type chatStartedED struct {
 	ChatID  int    `json:"cid"`
 	ChatKey string `json:"ckey"`
 	// yes, it's their fault
 	Flagged bool `json:"flaged"`
 }
 
-func (cs *chatStartedMessage) Bytes() ([]byte, error) {
-	gm := &genericMessage{
-		Prefix:    cs.Prefix(),
-		EventName: cs.EventName(),
-		EventData: cs,
-	}
-
-	return gm.Bytes()
-}
-
-func (cs *chatStartedMessage) Prefix() int {
-	return 4
-}
-
-func (cs *chatStartedMessage) EventName() string {
-	return chatStartedMessageIdentifier
-}
-
-// 4
-// {
-//     "ev_name": "_begacked",
-//     "ev_data": {
-//         "ckey": "0:41377010_MS9MeFFRRPbJC"
-//     },
-//     "ceid": 2
-// }
-type chatStartedAnckowledgeMessage struct {
+type chatStartedAnckowledgeED struct {
 	CKey string `json:"ckey"`
-	CEID int
-}
-
-func (csa *chatStartedAnckowledgeMessage) Bytes() ([]byte, error) {
-	gm := &genericMessage{
-		Prefix:    csa.Prefix(),
-		EventName: csa.EventName(),
-		EventData: csa,
-		CEID:      csa.CEID,
-	}
-
-	return gm.Bytes()
-}
-
-func (csa *chatStartedAnckowledgeMessage) Prefix() int {
-	return 4
-}
-
-func (csa *chatStartedAnckowledgeMessage) EventName() string {
-	return chatStartedMessageIdentifier
 }

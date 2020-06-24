@@ -54,13 +54,13 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	}
 	defer conn.Close()
 
-	done := make(chan bool)
-	setup := make(chan *setupMessage)
+	doneCh := make(chan bool)
+	setupCh := make(chan *setupMessage)
 
 	// start recv goroutine
 	go func() {
 		initialized := false
-		defer close(done)
+		defer close(doneCh)
 		for {
 			msgType, msgBytes, err := conn.ReadMessage()
 			if err != nil {
@@ -69,15 +69,15 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 			}
 
 			if !initialized {
-				prefix, msg := RawToTypeAndJSON(msgBytes)
-				if prefix == setupMessagePrefix {
+				prefix, msg := rawToTypeAndJSON(msgBytes)
+				if prefix == setup {
 					sm := &setupMessage{}
 					err := json.Unmarshal([]byte(msg), sm)
 					if err != nil {
 						log.Fatalf("Failed to parse setup message %s %s\n", err, msg)
 						return
 					}
-					setup <- sm
+					setupCh <- sm
 					initialized = true
 				}
 			}
@@ -108,7 +108,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	var setupMsg *setupMessage
 
 	select {
-	case sm := <-setup:
+	case sm := <-setupCh:
 		setupMsg = sm
 	case <-time.After(5 * time.Second):
 		log.Println("Waited 5 seconds for setup message")
@@ -133,7 +133,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 				log.Println("write close:", err)
 			}
 			select {
-			case <-done:
+			case <-doneCh:
 			case <-time.After(time.Second):
 			}
 			stop <- true

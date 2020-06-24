@@ -58,13 +58,13 @@ func (c *Client) Disconnect() {
 	close(c.send)
 }
 
-func (c *Client) processMessage(m *RawMessage) *message {
-	fmt.Println("processing message", string(m.Payload))
+func (c *Client) processMessage(rm *RawMessage) *message {
+	fmt.Println("processing message", string(rm.Payload))
 
 	if c.SID == "" {
 		// check for setup message
-		prefix, setupMsg := RawToTypeAndJSON(m.Payload)
-		if prefix == setupMessagePrefix {
+		prefix, setupMsg := rawToTypeAndJSON(rm.Payload)
+		if prefix == setup {
 			sm := &setupMessage{}
 			err := json.Unmarshal([]byte(setupMsg), sm)
 			if err != nil {
@@ -76,9 +76,14 @@ func (c *Client) processMessage(m *RawMessage) *message {
 		}
 	}
 
-	gm := PayloadToGeneric(m.Payload)
-	switch v := gm.EventData.(type) {
-	case *clientAcceptedMessage:
+	m, err := payloadToMessage(rm.Payload)
+	if err != nil {
+		log.Fatalln("Failed to parse message from payload.", err)
+	}
+
+	switch en := m.EventName; en {
+	case clientAccepted:
+		v := m.EventData.(*clientAcceptedED)
 		c.Hash = v.Hash
 		c.sendClientInfo()
 		c.sendOwack()
@@ -87,7 +92,7 @@ func (c *Client) processMessage(m *RawMessage) *message {
 	return nil
 }
 
-func (c *Client) sendMessage(m message) error {
+func (c *Client) sendMessage(m *message) error {
 	b, err := m.Bytes()
 	if err != nil {
 		return err
@@ -102,11 +107,10 @@ func (c *Client) sendMessage(m message) error {
 }
 
 func (c *Client) sendClientInfo() {
-	ci := NewClientInfoMessage(c.Hash, false)
-	c.sendMessage(ci)
+	ci := newClientInfoED(c.Hash, false)
+	c.sendMessage(newMessage(event, clientInfo, ci))
 }
 
 func (c *Client) sendOwack() {
-	owack := &owackMessage{}
-	c.sendMessage(owack)
+	c.sendMessage(newMessage(event, owack, nil))
 }
