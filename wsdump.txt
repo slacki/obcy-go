@@ -1,9 +1,6 @@
 recv: 0{"sid":"wbWZ23LsEktuCKQ","upgrades":[],"pingInterval":25000,"pingTimeout":40000}
-
 send: 4{"ev_name":"_cinfo","ev_data":{"cvdate":"2017-08-01","mobile":false,"cver":"v2.5","adf":"ajaxPHP","hash":"37#4#253#133","testdata":{"ckey":0,"recevsent":false}}}
-
 recv: 4{"ev_name":"cn_acc","ev_data":{"conn_id":"wbWZ23LsEktuCKQ","hash":"37#4#253#133"}}
-
 send: 4{"ev_name":"_owack"}
 
 send: 4{"ev_name":"_sas","ev_data":{"channel":"main","myself":{"sex":0,"loc":0},"preferences":{"sex":0,"loc":0}},"ceid":1}

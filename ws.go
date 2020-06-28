@@ -15,6 +15,7 @@ const wsURLSuffix = "/6eio/?EIO=3&transport=websocket"
 
 // WS represents websocket connection to 6obcy's servers
 type WS struct {
+	Debug bool
 }
 
 // RawMessage is a raw websocket message with type and payload
@@ -82,7 +83,9 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 				}
 			}
 
-			fmt.Println("ws ->:", string(msgBytes))
+			if ws.Debug {
+				fmt.Println("ws ->:", string(msgBytes))
+			}
 
 			receive <- &RawMessage{
 				Type:    msgType,
@@ -96,7 +99,9 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 		for {
 			rm := <-send
 
-			fmt.Println("ws <-:", string(rm.Payload))
+			if ws.Debug {
+				fmt.Println("ws <-:", string(rm.Payload))
+			}
 
 			err := conn.WriteMessage(rm.Type, rm.Payload)
 			if err != nil {
@@ -115,7 +120,6 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	}
 
 	// create a ticker and take care of sending pings
-	// for now it's hardcoded how often wa wanna do this
 	ticker := time.NewTicker(time.Millisecond * time.Duration(setupMsg.PingInterval))
 	defer ticker.Stop()
 

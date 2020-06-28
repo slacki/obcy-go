@@ -94,12 +94,18 @@ func payloadToMessage(b []byte) (*message, error) {
 	return m, nil
 }
 
-func newMessage(p prefix, en eventName, ed interface{}) *message {
-	return &message{
+func newMessage(p prefix, en eventName, ed interface{}, ceid int) *message {
+	m := &message{
 		Prefix:    p,
 		EventName: en,
 		EventData: ed,
 	}
+
+	if ceid > 0 {
+		m.CEID = ceid
+	}
+
+	return m
 }
 
 func (m *message) Bytes() ([]byte, error) {
@@ -155,7 +161,7 @@ type initChatPref struct {
 	Location int `json:"location"`
 }
 
-func newInitChatEventData() *initChatED {
+func newInitChatED() *initChatED {
 	pref := initChatPref{
 		Sex:      0,
 		Location: locationEntirePoland,

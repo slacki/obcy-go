@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -18,6 +19,7 @@ type Client struct {
 	recv   chan *RawMessage
 	send   chan *RawMessage
 	stopWS chan bool
+	conn   chan bool
 }
 
 // NewClient creates new Client
@@ -26,13 +28,14 @@ func NewClient() (*Client, error) {
 		recv:      make(chan *RawMessage, 100),
 		send:      make(chan *RawMessage, 100),
 		stopWS:    make(chan bool),
+		conn:      make(chan bool),
 		Connected: false,
 	}, nil
 }
 
 // Connect connects to the client with websockets and handles sending and receiving messages
-func (c *Client) Connect() {
-	c.ws = &WS{}
+func (c *Client) Connect() error {
+	c.ws = &WS{Debug: true}
 	go c.ws.Connect(c.send, c.recv, c.stopWS)
 	go func() {
 		for {
@@ -46,6 +49,13 @@ func (c *Client) Connect() {
 			}
 		}
 	}()
+
+	select {
+	case <-c.conn:
+		return nil
+	case <-time.After(3 * time.Second):
+		return fmt.Errorf("waited 3 seconds to connect")
+	}
 }
 
 // Disconnect closes WS connection, waits for confirmation that it's been closed
@@ -87,6 +97,7 @@ func (c *Client) processMessage(rm *RawMessage) *message {
 		c.Hash = v.Hash
 		c.sendClientInfo()
 		c.sendOwack()
+		c.conn <- true
 	}
 
 	return nil
@@ -108,9 +119,9 @@ func (c *Client) sendMessage(m *message) error {
 
 func (c *Client) sendClientInfo() {
 	ci := newClientInfoED(c.Hash, false)
-	c.sendMessage(newMessage(event, clientInfo, ci))
+	c.sendMessage(newMessage(event, clientInfo, ci, 0))
 }
 
 func (c *Client) sendOwack() {
-	c.sendMessage(newMessage(event, owack, nil))
+	c.sendMessage(newMessage(event, owack, nil, 0))
 }
