@@ -20,6 +20,7 @@ type Client struct {
 	send   chan *RawMessage
 	stopWS chan bool
 	conn   chan bool
+	subs   map[string]chan *message
 }
 
 // NewClient creates new Client
@@ -40,9 +41,12 @@ func (c *Client) Connect() error {
 	go func() {
 		for {
 			select {
-			case m, open := <-c.recv:
+			case rm, open := <-c.recv:
 				if open {
-					c.processMessage(m)
+					m := c.processMessage(rm)
+					if m != nil {
+						c.distributeMessage(m)
+					}
 				} else {
 					return
 				}
@@ -66,6 +70,21 @@ func (c *Client) Disconnect() {
 	close(c.stopWS)
 	close(c.recv)
 	close(c.send)
+}
+
+// Sub subscribes to recv messages
+func (c *Client) Sub(uuid string, ch chan *message) {
+	c.subs[uuid] = ch
+}
+
+// Unsub unsubscribes from recv messages
+func (c *Client) Unsub(uuid string) {
+	ch, ok := c.subs[uuid]
+	if ok {
+		// if exists, close chan and remove from map
+		close(ch)
+		delete(c.subs, uuid)
+	}
 }
 
 func (c *Client) processMessage(rm *RawMessage) *message {
@@ -98,9 +117,18 @@ func (c *Client) processMessage(rm *RawMessage) *message {
 		c.sendClientInfo()
 		c.sendOwack()
 		c.conn <- true
+	case usersCount:
+		v := m.EventData.(usersCountED)
+		fmt.Println("Count:", v)
 	}
 
-	return nil
+	return m
+}
+
+func (c *Client) distributeMessage(m *message) {
+	for _, ch := range c.subs {
+		ch <- m
+	}
 }
 
 func (c *Client) sendMessage(m *message) error {
@@ -119,9 +147,9 @@ func (c *Client) sendMessage(m *message) error {
 
 func (c *Client) sendClientInfo() {
 	ci := newClientInfoED(c.Hash, false)
-	c.sendMessage(newMessage(event, clientInfo, ci, 0))
+	c.sendMessage(newMessage(event, clientInfo, ci))
 }
 
 func (c *Client) sendOwack() {
-	c.sendMessage(newMessage(event, owack, nil, 0))
+	c.sendMessage(newMessage(event, owack, nil))
 }

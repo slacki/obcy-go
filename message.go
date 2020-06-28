@@ -19,11 +19,16 @@ const (
 )
 
 const (
-	clientAccepted eventName = "cn_acc"
-	clientInfo     eventName = "_cinfo"
-	owack          eventName = "_owack"
-	initChat       eventName = "_sas"
-	chatStarted    eventName = "talk_s"
+	clientAccepted       eventName = "cn_acc"
+	clientInfo           eventName = "_cinfo"
+	owack                eventName = "_owack"
+	usersCount           eventName = "count"
+	initChat             eventName = "_sas"
+	chatStarted          eventName = "talk_s"
+	chatStartedAck       eventName = "_begacked"
+	strangerTyping       eventName = "styp"
+	stopChat             eventName = "_distalk"
+	strangerDisconnected eventName = "sdis"
 )
 
 func rawToTypeAndJSON(b []byte) (prefix, string) {
@@ -49,23 +54,25 @@ type message struct {
 	EventName eventName   `json:"ev_name"`
 	EventData interface{} `json:"ev_data"`
 	CEID      int         `json:"ceid,omitempty"`
+	Val       bool        `json:"val,omitempty"`
 }
 
 func payloadToMessage(b []byte) (*message, error) {
 	pr, jsonStr := rawToTypeAndJSON(b)
 	jsonBytes := []byte(jsonStr)
 
-	eventNameInter := &struct {
-		EventName eventName `json:"ev_name"`
+	eventInter := &struct {
+		EventName eventName   `json:"ev_name"`
+		EventData interface{} `json:"ev_data"`
 	}{}
-	err := json.Unmarshal(jsonBytes, eventNameInter)
+	err := json.Unmarshal(jsonBytes, eventInter)
 	if err != nil {
 		return nil, err
 	}
 
 	m := &message{
 		Prefix:    pr,
-		EventName: eventNameInter.EventName,
+		EventName: eventInter.EventName,
 	}
 
 	fillED := func(v interface{}) {
@@ -89,20 +96,24 @@ func payloadToMessage(b []byte) (*message, error) {
 		fillED(&clientAcceptedED{})
 	case chatStarted:
 		fillED(&clientAcceptedED{})
+	case chatStartedAck:
+		fillED(&cKeyED{})
+	case strangerTyping:
+		m.EventData = eventInter.EventData.(bool)
+	case strangerDisconnected:
+		m.EventData = strangerDisconnectedED(eventInter.EventData.(float64)) // idk ¯\_(ツ)_/¯
+	case usersCount:
+		m.EventData = usersCountED(eventInter.EventData.(float64))
 	}
 
-	return m, nil
+	return m, err
 }
 
-func newMessage(p prefix, en eventName, ed interface{}, ceid int) *message {
+func newMessage(p prefix, en eventName, ed interface{}) *message {
 	m := &message{
 		Prefix:    p,
 		EventName: en,
 		EventData: ed,
-	}
-
-	if ceid > 0 {
-		m.CEID = ceid
 	}
 
 	return m
@@ -150,6 +161,8 @@ type clientAcceptedED struct {
 	Hash         string `json:"hash"`
 }
 
+type usersCountED int
+
 type initChatED struct {
 	Channel     string       `json:"channel"`
 	Myself      initChatPref `json:"myself"`
@@ -180,6 +193,11 @@ type chatStartedED struct {
 	Flagged bool `json:"flaged"`
 }
 
-type chatStartedAnckowledgeED struct {
+type strangerTypingED bool
+
+type strangerDisconnectedED int
+
+// used by: _distalk, _begacked
+type cKeyED struct {
 	CKey string `json:"ckey"`
 }

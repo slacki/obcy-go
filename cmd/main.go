@@ -38,7 +38,7 @@ func main() {
 			fmt.Println("!!! m:", m)
 		case <-interrupt:
 			log.Println("Received interrupt")
-			break
+			return
 		}
 	}
 }

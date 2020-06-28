@@ -4,9 +4,7 @@ recv: 4{"ev_name":"cn_acc","ev_data":{"conn_id":"wbWZ23LsEktuCKQ","hash":"37#4#2
 send: 4{"ev_name":"_owack"}
 
 send: 4{"ev_name":"_sas","ev_data":{"channel":"main","myself":{"sex":0,"loc":0},"preferences":{"sex":0,"loc":0}},"ceid":1}
-
 recv: 4{"ev_name":"talk_s","ev_data":{"cid":41377010,"ckey":"0:41377010_MS9MeFFRRPbJC","flaged":false}}
-
 send: 4{"ev_name":"_begacked","ev_data":{"ckey":"0:41377010_MS9MeFFRRPbJC"},"ceid":2}
 
 send: 4{"ev_name":"_mtyp","ev_data":{"ckey":"0:41377010_MS9MeFFRRPbJC","val":true}}
@@ -41,25 +39,25 @@ send: 4{"ev_name":"_pmsg","ev_data":{"ckey":"0:41377010_MS9MeFFRRPbJC","msg":"23
 
 recv: 4{"ev_name":"count","ev_data":7658}
 
-recv: 4{"ev_name":\"sdis\",\"ev_data\":41377010}
+recv: 4{"ev_name":"sdis","ev_data":41377010}
 
-send: 4{\"ev_name\":\"_sas\",\"ev_data\":{\"channel\":\"main\",\"myself\":{\"sex\":0,\"loc\":0},\"preferences\":{\"sex\":0,\"loc\":0}},\"ceid\":6}
+send: 4{"ev_name":"_sas","ev_data":{"channel":"main","myself":{"sex":0,"loc":0},"preferences":{"sex":0,"loc":0}},"ceid":6}
 
-recv: 4{\"ev_name\":\"talk_s\",\"ev_data\":{\"cid\":41377446,\"ckey\":\"0:41377446_OFpXLqJfZpyWP\",\"flaged\":false}}
+recv: 4{"ev_name":"talk_s","ev_data":{"cid":41377446,"ckey":"0:41377446_OFpXLqJfZpyWP","flaged":false}}
 
-send: 4{\"ev_name\":\"_begacked\",\"ev_data\":{\"ckey\":\"0:41377446_OFpXLqJfZpyWP\"},\"ceid\":7}
+send: 4{"ev_name":"_begacked","ev_data":{"ckey":"0:41377446_OFpXLqJfZpyWP"},"ceid":7}
 
-recv: 4{\"ev_name\":\"styp\",\"ev_data\":true}
+recv: 4{"ev_name":"styp","ev_data":true}
 
-recv: 4{\"ev_name\":\"styp\",\"ev_data\":false}
+recv: 4{"ev_name":"styp","ev_data":false}
 
-recv: 4{\"ev_name\":\"rmsg\",\"ev_data\":{\"post_id\":0,\"cid\":41377446,\"msg\":\"Hej\",\"who\":0}}
+recv: 4{"ev_name":"rmsg","ev_data":{"post_id":0,"cid":41377446,"msg":"Hej","who":0}}
 
-send: 4{\"ev_name\":\"_distalk\",\"ev_data\":{\"ckey\":\"0:41377446_OFpXLqJfZpyWP\"},\"ceid\":8}
+send: 4{"ev_name":"_distalk","ev_data":{"ckey":"0:41377446_OFpXLqJfZpyWP"},"ceid":8}
 
-recv: 4{\"ev_name\":\"sdis\",\"ev_data\":41377446}
+recv: 4{"ev_name":"sdis","ev_data":41377446}
 
-recv: 4{\"ev_name\":\"count\",\"ev_data\":7663}
+recv: 4{"ev_name":"count","ev_data":7663}
 
 send: 2
 recv: 3
