@@ -27,6 +27,7 @@ const (
 	chatStarted          eventName = "talk_s"
 	chatStartedAck       eventName = "_begacked"
 	strangerTyping       eventName = "styp"
+	typing               eventName = "_mtyp"
 	stopChat             eventName = "_distalk"
 	strangerDisconnected eventName = "sdis"
 )

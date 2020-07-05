@@ -43,49 +43,43 @@ func (c *Conversation) setCEID(n int) {
 // It's not safe to run Begin on the same client concurrently. Might fix someday.
 func (c *Conversation) Begin() error {
 	c.recv = make(chan *message)
+	c.client.Sub(c.id, c.recv)
+
 	c.setCEID(0)
 	m := newMessage(event, initChat, newInitChatED())
 	m.CEID = c.getCEID()
 	c.client.sendMessage(m)
 
 	// wait for talk_s and send _begacked
-outer:
-	for {
-		select {
-		case m, open := <-c.recv:
-			if !open {
-				return fmt.Errorf("conversation recv chan closed unexpectedly")
-			}
-			if m.EventName == chatStarted {
-				// fill data
-				v := m.EventData.(*chatStartedED)
-				c.cKey = v.ChatKey
-				c.flagged = v.Flagged
-
-				// send ack
-				m = newMessage(event, chatStartedAck, &cKeyED{CKey: c.cKey})
-				m.CEID = c.getCEID()
-				c.client.sendMessage(m)
-
-				break outer
-			}
-		case <-time.After(3 * time.Second):
-			return fmt.Errorf("waited 3 seconds for talk_s")
+	select {
+	case m, open := <-c.recv:
+		if !open {
+			return fmt.Errorf("conversation recv chan closed unexpectedly")
 		}
+		if m.EventName == chatStarted {
+			// fill data
+			v := m.EventData.(*chatStartedED)
+			c.cKey = v.ChatKey
+			c.flagged = v.Flagged
+
+			// send ack
+			m = newMessage(event, chatStartedAck, &cKeyED{CKey: c.cKey})
+			m.CEID = c.getCEID()
+			c.client.sendMessage(m)
+		}
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("waited 3 seconds for talk_s")
 	}
 
 	// start read goroutine
 	go func() {
-		c.client.Sub(c.id, c.recv)
-		defer c.client.Unsub(c.id)
-
 		for {
 			select {
 			case m, open := <-c.recv:
 				if open {
-					fmt.Printf("%+v\n", m)
+					c.processMessage(m)
 				} else {
-					// this goroutine stops when the read channel is closed
+					fmt.Println("conversation recv chan closed")
 					return
 				}
 			}
@@ -93,6 +87,23 @@ outer:
 	}()
 
 	return nil
+}
+
+func (c *Conversation) processMessage(m *message) {
+	// check if message ia addressed to this conversation
+
+	fmt.Println("processing message inside conversation")
+
+	switch en := m.EventName; en {
+	case strangerTyping:
+		v := m.EventData.(bool)
+		for _, s := range c.typingSubs {
+			s <- v
+		}
+	case usersCount:
+		v := m.EventData.(usersCountED)
+		fmt.Println("Count:", v)
+	}
 }
 
 // End ends a conversation

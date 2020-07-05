@@ -21,22 +21,25 @@ type Client struct {
 	stopWS chan bool
 	conn   chan bool
 	subs   map[string]chan *message
+	debug  bool
 }
 
 // NewClient creates new Client
-func NewClient() (*Client, error) {
+func NewClient(debug bool) (*Client, error) {
 	return &Client{
 		recv:      make(chan *RawMessage, 100),
-		send:      make(chan *RawMessage, 100),
+		send:      make(chan *RawMessage),
 		stopWS:    make(chan bool),
 		conn:      make(chan bool),
 		Connected: false,
+		subs:      make(map[string]chan *message),
+		debug:     debug,
 	}, nil
 }
 
 // Connect connects to the client with websockets and handles sending and receiving messages
 func (c *Client) Connect() error {
-	c.ws = &WS{Debug: true}
+	c.ws = &WS{Debug: c.debug}
 	go c.ws.Connect(c.send, c.recv, c.stopWS)
 	go func() {
 		for {
@@ -88,8 +91,6 @@ func (c *Client) Unsub(uuid string) {
 }
 
 func (c *Client) processMessage(rm *RawMessage) *message {
-	fmt.Println("processing message", string(rm.Payload))
-
 	if c.SID == "" {
 		// check for setup message
 		prefix, setupMsg := rawToTypeAndJSON(rm.Payload)
