@@ -61,3 +61,6 @@ recv: 4{"ev_name":"count","ev_data":7663}
 
 send: 2
 recv: 3
+
+additional:
+4{ev_name: "_distalk", ev_data: {ckey: "1:64807390_ySQgLD4PszxKm"}, ceid: 3}

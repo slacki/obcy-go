@@ -27,9 +27,12 @@ const (
 	chatStarted          eventName = "talk_s"
 	chatStartedAck       eventName = "_begacked"
 	strangerTyping       eventName = "styp"
-	typing               eventName = "_mtyp"
 	stopChat             eventName = "_distalk"
 	strangerDisconnected eventName = "sdis"
+	strangerMessage      eventName = "rmsg"
+	sendMessage          eventName = "_pmsg"
+	sendTyping           eventName = "_mtyp"
+	sendDisconnect       eventName = "_distalk"
 )
 
 func rawToTypeAndJSON(b []byte) (prefix, string) {
@@ -89,18 +92,12 @@ func payloadToMessage(b []byte) (*message, error) {
 	switch en := m.EventName; en {
 	case clientAccepted:
 		fillED(&clientAcceptedED{})
-	case clientInfo:
-		fillED(&clientInfoED{})
-	case owack:
-		fillED(nil)
-	case initChat:
-		fillED(&clientAcceptedED{})
 	case chatStarted:
 		fillED(&clientAcceptedED{})
-	case chatStartedAck:
-		fillED(&cKeyED{})
 	case strangerTyping:
 		m.EventData = eventInter.EventData.(bool)
+	case strangerMessage:
+		fillED(&strangerMessageED{})
 	case strangerDisconnected:
 		m.EventData = strangerDisconnectedED(eventInter.EventData.(float64)) // idk ¯\_(ツ)_/¯
 	case usersCount:
@@ -198,7 +195,20 @@ type strangerTypingED bool
 
 type strangerDisconnectedED int
 
-// used by: _distalk, _begacked
+// used by: _distalk, _begacked, _mtyp
 type cKeyED struct {
 	CKey string `json:"ckey"`
+}
+
+type strangerMessageED struct {
+	PostID int    `json:"post_id"`
+	CID    int    `json:"cid"`
+	Msg    string `json:"msg"`
+	Who    int    `json:"who"`
+}
+
+type sendMessageED struct {
+	CKey string `json:"ckey"`
+	Msg  string `json:"msg"`
+	IDN  int    `json:"idn"`
 }

@@ -12,9 +12,11 @@ type Conversation struct {
 	client  *Client
 	id      string
 	recv    chan *message
-	cKey    string
+	chatKey string
+	chatID  int
 	flagged bool
 	ceid    int
+	idn     int
 
 	messagesSubs     []chan string
 	typingSubs       []chan bool
@@ -27,6 +29,7 @@ func NewConversation(c *Client) (*Conversation, error) {
 		client: c,
 		id:     shortuuid.New(),
 		ceid:   0,
+		idn:    -1,
 	}, nil
 }
 
@@ -35,8 +38,14 @@ func (c *Conversation) getCEID() int {
 	return c.ceid
 }
 
-func (c *Conversation) setCEID(n int) {
-	c.ceid = n
+func (c *Conversation) getIDN() int {
+	c.idn++
+	return c.idn
+}
+
+func (c *Conversation) resetCounters() {
+	c.ceid = 0
+	c.idn = -1
 }
 
 // Begin starts a conversation.
@@ -45,7 +54,7 @@ func (c *Conversation) Begin() error {
 	c.recv = make(chan *message)
 	c.client.Sub(c.id, c.recv)
 
-	c.setCEID(0)
+	c.resetCounters()
 	m := newMessage(event, initChat, newInitChatED())
 	m.CEID = c.getCEID()
 	c.client.sendMessage(m)
@@ -59,11 +68,12 @@ func (c *Conversation) Begin() error {
 		if m.EventName == chatStarted {
 			// fill data
 			v := m.EventData.(*chatStartedED)
-			c.cKey = v.ChatKey
+			c.chatKey = v.ChatKey
+			c.chatID = v.ChatID
 			c.flagged = v.Flagged
 
 			// send ack
-			m = newMessage(event, chatStartedAck, &cKeyED{CKey: c.cKey})
+			m = newMessage(event, chatStartedAck, &cKeyED{CKey: c.chatKey})
 			m.CEID = c.getCEID()
 			c.client.sendMessage(m)
 		}
@@ -89,25 +99,16 @@ func (c *Conversation) Begin() error {
 	return nil
 }
 
-func (c *Conversation) processMessage(m *message) {
-	// check if message ia addressed to this conversation
-
-	fmt.Println("processing message inside conversation")
-
-	switch en := m.EventName; en {
-	case strangerTyping:
-		v := m.EventData.(bool)
-		for _, s := range c.typingSubs {
-			s <- v
-		}
-	case usersCount:
-		v := m.EventData.(usersCountED)
-		fmt.Println("Count:", v)
-	}
-}
-
 // End ends a conversation
 func (c *Conversation) End() {
+	c.client.sendMessage(&message{
+		Prefix:    event,
+		EventName: sendDisconnect,
+		EventData: &cKeyED{
+			CKey: c.chatKey,
+		},
+		CEID: c.getCEID(),
+	})
 	c.client.Unsub(c.id)
 }
 
@@ -124,4 +125,55 @@ func (c *Conversation) SubDisconnected(ch chan bool) {
 // SubTyping subscribes channel to typing events
 func (c *Conversation) SubTyping(ch chan bool) {
 	c.typingSubs = append(c.typingSubs, ch)
+}
+
+// SendMessage sends a message to a stranger
+func (c *Conversation) SendMessage(m string) error {
+	return c.client.sendMessage(&message{
+		Prefix:    event,
+		EventName: sendMessage,
+		EventData: &sendMessageED{
+			CKey: c.chatKey,
+			Msg:  m,
+			IDN:  c.getIDN(),
+		},
+	})
+}
+
+// SendTyping sends change of typing state to a stranger
+func (c *Conversation) SendTyping(t bool) error {
+	return c.client.sendMessage(&message{
+		Prefix:    event,
+		EventName: sendTyping,
+		EventData: &cKeyED{
+			CKey: c.chatKey,
+		},
+		Val: t,
+	})
+}
+
+func (c *Conversation) processMessage(m *message) {
+	switch en := m.EventName; en {
+	case strangerMessage:
+		v := m.EventData.(strangerMessageED)
+		if v.CID == c.chatID {
+			for _, s := range c.messagesSubs {
+				s <- v.Msg
+			}
+		}
+	case strangerDisconnected:
+		v := m.EventData.(strangerDisconnectedED)
+		if int(v) == c.chatID {
+			for _, s := range c.disconnectedSubs {
+				s <- true
+			}
+		}
+	case strangerTyping:
+		// no way to check which stranger is typing
+		// the message doesn't have any ID...
+		v := m.EventData.(bool)
+		for _, s := range c.typingSubs {
+			s <- v
+		}
+	}
 }
