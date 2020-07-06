@@ -81,6 +81,8 @@ func (c *Conversation) Begin() error {
 		return fmt.Errorf("waited 3 seconds for talk_s")
 	}
 
+	time.Sleep(time.Second)
+
 	// start read goroutine
 	go func() {
 		for {
@@ -100,15 +102,17 @@ func (c *Conversation) Begin() error {
 }
 
 // End ends a conversation
-func (c *Conversation) End() {
-	c.client.sendMessage(&message{
-		Prefix:    event,
-		EventName: sendDisconnect,
-		EventData: &cKeyED{
-			CKey: c.chatKey,
-		},
-		CEID: c.getCEID(),
-	})
+func (c *Conversation) End(disconnect bool) {
+	if disconnect {
+		c.client.sendMessage(&message{
+			Prefix:    event,
+			EventName: sendDisconnect,
+			EventData: &cKeyED{
+				CKey: c.chatKey,
+			},
+			CEID: c.getCEID(),
+		})
+	}
 	c.client.Unsub(c.id)
 }
 
@@ -155,7 +159,7 @@ func (c *Conversation) SendTyping(t bool) error {
 func (c *Conversation) processMessage(m *message) {
 	switch en := m.EventName; en {
 	case strangerMessage:
-		v := m.EventData.(strangerMessageED)
+		v := m.EventData.(*strangerMessageED)
 		if v.CID == c.chatID {
 			for _, s := range c.messagesSubs {
 				s <- v.Msg

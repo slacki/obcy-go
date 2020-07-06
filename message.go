@@ -83,7 +83,11 @@ func payloadToMessage(b []byte) (*message, error) {
 		if v == nil {
 			m.EventData = v
 		} else {
-			json.Unmarshal(jsonBytes, v)
+			remarshaled, err := json.Marshal(eventInter.EventData)
+			if err != nil {
+				log.Fatalln("Failed to parse remarshaled event data", err)
+			}
+			json.Unmarshal(remarshaled, v)
 			m.EventData = v
 		}
 	}
@@ -93,7 +97,7 @@ func payloadToMessage(b []byte) (*message, error) {
 	case clientAccepted:
 		fillED(&clientAcceptedED{})
 	case chatStarted:
-		fillED(&clientAcceptedED{})
+		fillED(&chatStartedED{})
 	case strangerTyping:
 		m.EventData = eventInter.EventData.(bool)
 	case strangerMessage:
@@ -187,8 +191,7 @@ func newInitChatED() *initChatED {
 type chatStartedED struct {
 	ChatID  int    `json:"cid"`
 	ChatKey string `json:"ckey"`
-	// yes, it's their fault
-	Flagged bool `json:"flaged"`
+	Flagged bool   `json:"flaged"`
 }
 
 type strangerTypingED bool

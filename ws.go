@@ -99,6 +99,9 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 		for {
 			rm := <-send
 
+			if rm == nil {
+				continue
+			}
 			if ws.Debug {
 				fmt.Println("ws <-:", string(rm.Payload))
 			}
@@ -127,7 +130,7 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	for {
 		select {
 		case <-ticker.C:
-			err := conn.WriteMessage(websocket.TextMessage, []byte("3"))
+			err := conn.WriteMessage(websocket.TextMessage, []byte(string(ping)))
 			if err != nil {
 				log.Println("Failed to ping", err)
 			}
@@ -141,6 +144,8 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 			case <-time.After(time.Second):
 			}
 			stop <- true
+			return nil
+		case <-doneCh:
 			return nil
 		}
 	}
