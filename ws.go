@@ -69,8 +69,8 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 				return
 			}
 
+			prefix, msg := rawToTypeAndJSON(msgBytes)
 			if !initialized {
-				prefix, msg := rawToTypeAndJSON(msgBytes)
 				if prefix == setup {
 					sm := &setupMessage{}
 					err := json.Unmarshal([]byte(msg), sm)
@@ -81,6 +81,12 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 					setupCh <- sm
 					initialized = true
 				}
+			}
+			if prefix == pong {
+				if ws.Debug {
+					fmt.Println("pong")
+				}
+				continue
 			}
 
 			if ws.Debug {
@@ -130,7 +136,10 @@ func (ws *WS) Connect(send, receive chan *RawMessage, stop chan bool) error {
 	for {
 		select {
 		case <-ticker.C:
-			err := conn.WriteMessage(websocket.TextMessage, []byte(string(ping)))
+			if ws.Debug {
+				fmt.Println("ping")
+			}
+			err := conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("%d", ping)))
 			if err != nil {
 				log.Println("Failed to ping", err)
 			}
